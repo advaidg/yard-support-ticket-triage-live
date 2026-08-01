@@ -1,5 +1,8 @@
 """Auto-generated Chain Executor for Support Ticket Triage (live)."""
 import asyncio
+import json
+import os
+
 import httpx
 from fastapi import FastAPI
 
@@ -11,6 +14,15 @@ AGENTS = [
     {"id": "sentiment", "agent_id": "b6f354f8-0746-4df8-a91e-da44df696f6d", "endpoint": "http://triage-sentiment:9102", "timeout": 20},
     {"id": "respond", "agent_id": "964a2673-82be-41e5-8f20-138c5d86345f", "endpoint": "http://triage-responder:9103", "timeout": 45},
 ]
+
+# Endpoints baked in above come from the registry at generation time —
+# correct when agents run wherever they're registered, stale when this
+# orchestrator is deployed alongside its own freshly-spun-up agent pods
+# elsewhere (a different cluster/VPC). YARD_AGENT_ENDPOINTS (JSON, node id
+# -> endpoint), set by the K8s deploy generator, overrides per-node.
+_ENDPOINT_OVERRIDES = json.loads(os.environ.get("YARD_AGENT_ENDPOINTS", "{}"))
+for _agent in AGENTS:
+    _agent["endpoint"] = _ENDPOINT_OVERRIDES.get(_agent["id"], _agent["endpoint"])
 
 EDGES = [
     {"id": "", "source": "classify", "target": "sentiment", "transform": "passthrough"},
