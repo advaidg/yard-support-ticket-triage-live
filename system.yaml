@@ -1,0 +1,134 @@
+name: Support Ticket Triage (live)
+description: "Classify inbound tickets, gauge sentiment, then draft a customer reply\
+  \ \u2014 real agents, real Bedrock/Anthropic calls"
+namespace: acme/support
+architecture: sequential
+environment: dev
+orchestrator_config:
+  llm_model: null
+  conditions: null
+  engine_type: chain_executor
+  routing_mode: sequential
+  system_prompt: Triage inbound customer tickets through classification, sentiment
+    analysis, and response drafting
+  max_iterations: 5
+  merge_agent_id: null
+  merge_strategy: null
+  transport_mode: centralized
+  llm_temperature: null
+  fallback_agent_id: null
+  quality_threshold: null
+  reflection_prompt: null
+  quality_metric_key: null
+  reflection_enabled: null
+  max_refinement_loops: null
+  allow_partial_results: null
+  fanout_timeout_seconds: null
+memory_config:
+  open: true
+  schema: null
+  strict: false
+  strategy: shared_bus
+  persistence: session
+  initial_context: null
+  max_memory_keys: 150
+  memory_ttl_seconds: null
+error_recovery:
+  dead_letter_queue: true
+  max_total_retries: 10
+  on_system_failure: return_partial
+  global_timeout_seconds: 240
+  circuit_breaker_enabled: true
+  circuit_breaker_threshold: 3
+  circuit_breaker_reset_seconds: 60
+observability:
+  log_level: info
+  trace_enabled: true
+  metrics_enabled: true
+  trace_include_io: true
+  webhook_on_failure: null
+  webhook_on_complete: null
+  trace_include_memory: true
+nodes:
+- id: classify
+  config:
+    retries: 3
+    on_failure: abort
+    input_mapping: null
+    memory_access: read-write
+    retry_backoff: fixed
+    system_prompt: null
+    output_mapping: null
+    rate_limit_rpm: null
+    retry_delay_ms: 1000
+    timeout_seconds: 20
+    cache_ttl_seconds: null
+    fallback_agent_id: null
+  agent_id: fa08fb4c-86ab-4856-960f-f751b55e551f
+  position:
+    x: 100.0
+    y: 250.0
+  agent_version: latest
+- id: sentiment
+  config:
+    retries: 2
+    on_failure: skip
+    input_mapping: null
+    memory_access: read-write
+    retry_backoff: fixed
+    system_prompt: null
+    output_mapping: null
+    rate_limit_rpm: null
+    retry_delay_ms: 1000
+    timeout_seconds: 20
+    cache_ttl_seconds: null
+    fallback_agent_id: null
+  agent_id: b6f354f8-0746-4df8-a91e-da44df696f6d
+  position:
+    x: 450.0
+    y: 250.0
+  agent_version: latest
+- id: respond
+  config:
+    retries: 2
+    on_failure: abort
+    input_mapping: null
+    memory_access: read-write
+    retry_backoff: fixed
+    system_prompt: null
+    output_mapping: null
+    rate_limit_rpm: null
+    retry_delay_ms: 1000
+    timeout_seconds: 45
+    cache_ttl_seconds: null
+    fallback_agent_id: null
+  agent_id: 964a2673-82be-41e5-8f20-138c5d86345f
+  position:
+    x: 800.0
+    y: 250.0
+  agent_version: latest
+edges:
+- id: e1
+  condition: null
+  transform:
+    mappings: null
+    strategy: passthrough
+    llm_model: null
+    llm_prompt: null
+  memory_keys: null
+  memory_pass: full
+  source_node_id: classify
+  target_node_id: sentiment
+  schema_compatibility: null
+- id: e2
+  condition: null
+  transform:
+    mappings: null
+    strategy: passthrough
+    llm_model: null
+    llm_prompt: null
+  memory_keys: null
+  memory_pass: full
+  source_node_id: sentiment
+  target_node_id: respond
+  schema_compatibility: null

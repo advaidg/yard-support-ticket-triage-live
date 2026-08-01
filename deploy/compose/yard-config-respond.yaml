@@ -1,0 +1,15 @@
+system_id: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+node_id: respond
+transport_mode: centralized
+input_mode: http
+output_mode: sync
+memory:
+  reads:
+  - classification_result
+  - sentiment_result
+  writes:
+  - draft_reply
+  scope: system
+failure:
+  mode: retry
+  max_retries: 3

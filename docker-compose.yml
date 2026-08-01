@@ -1,0 +1,103 @@
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+  orchestrator:
+    image: agentyard/orchestrator:latest
+    ports:
+    - 8080:8080
+    environment:
+      YARD_SYSTEM_ID: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+      YARD_TRANSPORT: http
+      YARD_REDIS_URL: redis://redis:6379
+      YARD_ENGINE_TYPE: chain_executor
+      YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+    depends_on:
+      redis:
+        condition: service_healthy
+  triage-classifier:
+    image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-classifier:latest
+    environment:
+      YARD_TRANSPORT: http
+      YARD_SYSTEM_ID: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+      YARD_NODE_ID: classify
+      YARD_REDIS_URL: redis://redis:6379
+      YARD_PORT: '9000'
+      YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_MEMORY: shared_bus
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    configs:
+    - source: yard_cfg_classify
+      target: /yard/config.yaml
+  triage-sentiment:
+    image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-sentiment:latest
+    environment:
+      YARD_TRANSPORT: http
+      YARD_SYSTEM_ID: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+      YARD_NODE_ID: sentiment
+      YARD_REDIS_URL: redis://redis:6379
+      YARD_PORT: '9000'
+      YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_MEMORY: shared_bus
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    configs:
+    - source: yard_cfg_sentiment
+      target: /yard/config.yaml
+  triage-responder:
+    image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-responder:latest
+    environment:
+      YARD_TRANSPORT: http
+      YARD_SYSTEM_ID: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+      YARD_NODE_ID: respond
+      YARD_REDIS_URL: redis://redis:6379
+      YARD_PORT: '9000'
+      YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_MEMORY: shared_bus
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python -c "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    configs:
+    - source: yard_cfg_respond
+      target: /yard/config.yaml
+networks:
+  default:
+    name: yard-support-ticket-triage-live
+configs:
+  yard_cfg_classify:
+    file: ./yard-config-classify.yaml
+  yard_cfg_sentiment:
+    file: ./yard-config-sentiment.yaml
+  yard_cfg_respond:
+    file: ./yard-config-respond.yaml

@@ -1,0 +1,711 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yard-support-ticket-triage-live
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: yard-support-ticket-triage-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - image: redis:7-alpine
+        name: redis
+        ports:
+        - containerPort: 6379
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: yard-support-ticket-triage-live
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: orchestrator
+    yard-system: yard-support-ticket-triage-live
+  name: orchestrator
+  namespace: yard-support-ticket-triage-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+        yard-system: yard-support-ticket-triage-live
+    spec:
+      containers:
+      - env:
+        - name: YARD_SYSTEM_ID
+          value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+        - name: YARD_TRANSPORT
+          value: http
+        - name: YARD_REDIS_URL
+          value: redis://redis:6379
+        - name: YARD_ENGINE_TYPE
+          value: chain_executor
+        - name: YARD_OTLP_ENDPOINT
+          value: http://jaeger:4318/v1/traces
+        - name: YARD_ROLE
+          value: in-cluster-orchestrator
+        - name: YARD_SYSTEM_SPEC_PATH
+          value: /etc/agentyard/system.json
+        image: agentyard-engine:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        name: orchestrator
+        ports:
+        - containerPort: 8003
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /health
+            port: 8003
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /etc/agentyard
+          name: yard-system-spec
+          readOnly: true
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      volumes:
+      - configMap:
+          name: yard-system-spec
+        name: yard-system-spec
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator
+  namespace: yard-support-ticket-triage-live
+spec:
+  ports:
+  - nodePort: 30527
+    port: 8003
+    targetPort: 8003
+  selector:
+    app: orchestrator
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: triage-classifier
+    yard-system: yard-support-ticket-triage-live
+  name: triage-classifier
+  namespace: yard-support-ticket-triage-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triage-classifier
+  template:
+    metadata:
+      labels:
+        app: triage-classifier
+        yard-system: yard-support-ticket-triage-live
+    spec:
+      containers:
+      - env:
+        - name: YARD_TRANSPORT
+          value: http
+        - name: YARD_SYSTEM_ID
+          value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+        - name: YARD_NODE_ID
+          value: classify
+        - name: YARD_REDIS_URL
+          value: redis://redis:6379
+        - name: YARD_PORT
+          value: '9000'
+        - name: YARD_OTLP_ENDPOINT
+          value: http://jaeger:4318/v1/traces
+        - name: YARD_MEMORY
+          value: shared_bus
+        image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-classifier:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        name: triage-classifier
+        ports:
+        - containerPort: 9000
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /yard/config.yaml
+          name: yard-config
+          readOnly: true
+          subPath: classify.yaml
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      volumes:
+      - configMap:
+          name: yard-node-configs
+        name: yard-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triage-classifier
+  namespace: yard-support-ticket-triage-live
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+  selector:
+    app: triage-classifier
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: triage-sentiment
+    yard-system: yard-support-ticket-triage-live
+  name: triage-sentiment
+  namespace: yard-support-ticket-triage-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triage-sentiment
+  template:
+    metadata:
+      labels:
+        app: triage-sentiment
+        yard-system: yard-support-ticket-triage-live
+    spec:
+      containers:
+      - env:
+        - name: YARD_TRANSPORT
+          value: http
+        - name: YARD_SYSTEM_ID
+          value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+        - name: YARD_NODE_ID
+          value: sentiment
+        - name: YARD_REDIS_URL
+          value: redis://redis:6379
+        - name: YARD_PORT
+          value: '9000'
+        - name: YARD_OTLP_ENDPOINT
+          value: http://jaeger:4318/v1/traces
+        - name: YARD_MEMORY
+          value: shared_bus
+        image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-sentiment:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        name: triage-sentiment
+        ports:
+        - containerPort: 9000
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /yard/config.yaml
+          name: yard-config
+          readOnly: true
+          subPath: sentiment.yaml
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      volumes:
+      - configMap:
+          name: yard-node-configs
+        name: yard-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triage-sentiment
+  namespace: yard-support-ticket-triage-live
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+  selector:
+    app: triage-sentiment
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: triage-responder
+    yard-system: yard-support-ticket-triage-live
+  name: triage-responder
+  namespace: yard-support-ticket-triage-live
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triage-responder
+  template:
+    metadata:
+      labels:
+        app: triage-responder
+        yard-system: yard-support-ticket-triage-live
+    spec:
+      containers:
+      - env:
+        - name: YARD_TRANSPORT
+          value: http
+        - name: YARD_SYSTEM_ID
+          value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+        - name: YARD_NODE_ID
+          value: respond
+        - name: YARD_REDIS_URL
+          value: redis://redis:6379
+        - name: YARD_PORT
+          value: '9000'
+        - name: YARD_OTLP_ENDPOINT
+          value: http://jaeger:4318/v1/traces
+        - name: YARD_MEMORY
+          value: shared_bus
+        image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-responder:latest
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 15
+          periodSeconds: 30
+          timeoutSeconds: 5
+        name: triage-responder
+        ports:
+        - containerPort: 9000
+        readinessProbe:
+          failureThreshold: 2
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+        volumeMounts:
+        - mountPath: /yard/config.yaml
+          name: yard-config
+          readOnly: true
+          subPath: respond.yaml
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      volumes:
+      - configMap:
+          name: yard-node-configs
+        name: yard-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triage-responder
+  namespace: yard-support-ticket-triage-live
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+  selector:
+    app: triage-responder
+  type: ClusterIP
+---
+apiVersion: v1
+data:
+  classify.yaml: "system_id: 3f1c2295-bb97-4e5f-a092-373d067dcf12\nnode_id: classify\n\
+    transport_mode: centralized\ninput_mode: http\noutput_mode: sync\nmemory:\n  reads:\
+    \ []\n  writes:\n  - classification_result\n  scope: system\nfailure:\n  mode:\
+    \ retry\n  max_retries: 3\n"
+  respond.yaml: "system_id: 3f1c2295-bb97-4e5f-a092-373d067dcf12\nnode_id: respond\n\
+    transport_mode: centralized\ninput_mode: http\noutput_mode: sync\nmemory:\n  reads:\n\
+    \  - classification_result\n  - sentiment_result\n  writes:\n  - draft_reply\n\
+    \  scope: system\nfailure:\n  mode: retry\n  max_retries: 3\n"
+  sentiment.yaml: "system_id: 3f1c2295-bb97-4e5f-a092-373d067dcf12\nnode_id: sentiment\n\
+    transport_mode: centralized\ninput_mode: http\noutput_mode: sync\nmemory:\n  reads:\n\
+    \  - classification_result\n  writes:\n  - sentiment_result\n  scope: system\n\
+    failure:\n  mode: retry\n  max_retries: 3\n"
+kind: ConfigMap
+metadata:
+  name: yard-node-configs
+  namespace: yard-support-ticket-triage-live
+---
+apiVersion: v1
+data:
+  system.json: "architecture: sequential\ncreated_at: '2026-07-31T19:43:05.481102Z'\n\
+    description: \"Classify inbound tickets, gauge sentiment, then draft a customer\
+    \ reply\\\n  \\ \\u2014 real agents, real Bedrock/Anthropic calls\"\nedges:\n\
+    - condition: null\n  id: e1\n  memory_keys: null\n  memory_pass: full\n  schema_compatibility:\
+    \ null\n  source_node_id: classify\n  target_node_id: sentiment\n  transform:\n\
+    \    llm_model: null\n    llm_prompt: null\n    mappings: null\n    strategy:\
+    \ passthrough\n- condition: null\n  id: e2\n  memory_keys: null\n  memory_pass:\
+    \ full\n  schema_compatibility: null\n  source_node_id: sentiment\n  target_node_id:\
+    \ respond\n  transform:\n    llm_model: null\n    llm_prompt: null\n    mappings:\
+    \ null\n    strategy: passthrough\nenvironment: dev\nerror_recovery:\n  circuit_breaker_enabled:\
+    \ true\n  circuit_breaker_reset_seconds: 60\n  circuit_breaker_threshold: 3\n\
+    \  dead_letter_queue: true\n  global_timeout_seconds: 240\n  max_total_retries:\
+    \ 10\n  on_system_failure: return_partial\ngithub_repo_url: https://github.com/advaidg/yard-support-ticket-triage--live-\n\
+    global_token: null\nid: 3f1c2295-bb97-4e5f-a092-373d067dcf12\nmemory_config:\n\
+    \  initial_context: null\n  max_memory_keys: 150\n  memory_ttl_seconds: null\n\
+    \  open: true\n  persistence: session\n  schema: null\n  strategy: shared_bus\n\
+    \  strict: false\nname: Support Ticket Triage (live)\nnamespace: acme/support\n\
+    nodes:\n- agent_id: fa08fb4c-86ab-4856-960f-f751b55e551f\n  agent_version: latest\n\
+    \  config:\n    cache_ttl_seconds: null\n    fallback_agent_id: null\n    input_mapping:\
+    \ null\n    memory_access: read-write\n    on_failure: abort\n    output_mapping:\
+    \ null\n    rate_limit_rpm: null\n    retries: 3\n    retry_backoff: fixed\n \
+    \   retry_delay_ms: 1000\n    system_prompt: null\n    timeout_seconds: 20\n \
+    \ id: classify\n  position:\n    x: 100.0\n    y: 250.0\n- agent_id: b6f354f8-0746-4df8-a91e-da44df696f6d\n\
+    \  agent_version: latest\n  config:\n    cache_ttl_seconds: null\n    fallback_agent_id:\
+    \ null\n    input_mapping: null\n    memory_access: read-write\n    on_failure:\
+    \ skip\n    output_mapping: null\n    rate_limit_rpm: null\n    retries: 2\n \
+    \   retry_backoff: fixed\n    retry_delay_ms: 1000\n    system_prompt: null\n\
+    \    timeout_seconds: 20\n  id: sentiment\n  position:\n    x: 450.0\n    y: 250.0\n\
+    - agent_id: 964a2673-82be-41e5-8f20-138c5d86345f\n  agent_version: latest\n  config:\n\
+    \    cache_ttl_seconds: null\n    fallback_agent_id: null\n    input_mapping:\
+    \ null\n    memory_access: read-write\n    on_failure: abort\n    output_mapping:\
+    \ null\n    rate_limit_rpm: null\n    retries: 2\n    retry_backoff: fixed\n \
+    \   retry_delay_ms: 1000\n    system_prompt: null\n    timeout_seconds: 45\n \
+    \ id: respond\n  position:\n    x: 800.0\n    y: 250.0\nobservability:\n  log_level:\
+    \ info\n  metrics_enabled: true\n  trace_enabled: true\n  trace_include_io: true\n\
+    \  trace_include_memory: true\n  webhook_on_complete: null\n  webhook_on_failure:\
+    \ null\norchestrator_config:\n  allow_partial_results: null\n  conditions: null\n\
+    \  engine_type: chain_executor\n  fallback_agent_id: null\n  fanout_timeout_seconds:\
+    \ null\n  llm_model: null\n  llm_temperature: null\n  max_iterations: 5\n  max_refinement_loops:\
+    \ null\n  merge_agent_id: null\n  merge_strategy: null\n  quality_metric_key:\
+    \ null\n  quality_threshold: null\n  reflection_enabled: null\n  reflection_prompt:\
+    \ null\n  routing_mode: sequential\n  system_prompt: Triage inbound customer tickets\
+    \ through classification, sentiment\n    analysis, and response drafting\n  transport_mode:\
+    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-07-31T23:21:20.895026Z'\n\
+    version: 6\n"
+  transport: http
+kind: ConfigMap
+metadata:
+  name: system-config
+  namespace: yard-support-ticket-triage-live
+---
+apiVersion: v1
+data:
+  system.json: "{\n  \"id\": \"3f1c2295-bb97-4e5f-a092-373d067dcf12\",\n  \"name\"\
+    : \"Support Ticket Triage (live)\",\n  \"engine_type\": \"chain_executor\",\n\
+    \  \"transport_mode\": \"centralized\",\n  \"orchestrator_config\": {\n    \"\
+    llm_model\": null,\n    \"conditions\": null,\n    \"engine_type\": \"chain_executor\"\
+    ,\n    \"routing_mode\": \"sequential\",\n    \"system_prompt\": \"Triage inbound\
+    \ customer tickets through classification, sentiment analysis, and response drafting\"\
+    ,\n    \"max_iterations\": 5,\n    \"merge_agent_id\": null,\n    \"merge_strategy\"\
+    : null,\n    \"transport_mode\": \"centralized\",\n    \"llm_temperature\": null,\n\
+    \    \"fallback_agent_id\": null,\n    \"quality_threshold\": null,\n    \"reflection_prompt\"\
+    : null,\n    \"quality_metric_key\": null,\n    \"reflection_enabled\": null,\n\
+    \    \"max_refinement_loops\": null,\n    \"allow_partial_results\": null,\n \
+    \   \"fanout_timeout_seconds\": null\n  },\n  \"memory_config\": {\n    \"open\"\
+    : true,\n    \"schema\": null,\n    \"strict\": false,\n    \"strategy\": \"shared_bus\"\
+    ,\n    \"persistence\": \"session\",\n    \"initial_context\": null,\n    \"max_memory_keys\"\
+    : 150,\n    \"memory_ttl_seconds\": null\n  },\n  \"edges\": [\n    {\n      \"\
+    id\": \"e1\",\n      \"condition\": null,\n      \"transform\": {\n        \"\
+    mappings\": null,\n        \"strategy\": \"passthrough\",\n        \"llm_model\"\
+    : null,\n        \"llm_prompt\": null\n      },\n      \"memory_keys\": null,\n\
+    \      \"memory_pass\": \"full\",\n      \"source_node_id\": \"classify\",\n \
+    \     \"target_node_id\": \"sentiment\",\n      \"schema_compatibility\": null\n\
+    \    },\n    {\n      \"id\": \"e2\",\n      \"condition\": null,\n      \"transform\"\
+    : {\n        \"mappings\": null,\n        \"strategy\": \"passthrough\",\n   \
+    \     \"llm_model\": null,\n        \"llm_prompt\": null\n      },\n      \"memory_keys\"\
+    : null,\n      \"memory_pass\": \"full\",\n      \"source_node_id\": \"sentiment\"\
+    ,\n      \"target_node_id\": \"respond\",\n      \"schema_compatibility\": null\n\
+    \    }\n  ],\n  \"nodes\": [\n    {\n      \"id\": \"classify\",\n      \"agent_id\"\
+    : \"fa08fb4c-86ab-4856-960f-f751b55e551f\",\n      \"agent_name\": \"triage-classifier\"\
+    ,\n      \"agent_version\": \"latest\",\n      \"a2a_endpoint\": \"http://triage-classifier.yard-support-ticket-triage-live.svc.cluster.local:9000\"\
+    ,\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"title\"\
+    : \"Input\",\n        \"required\": [\n          \"message\"\n        ],\n   \
+    \     \"properties\": {\n          \"message\": {\n            \"type\": \"string\"\
+    ,\n            \"title\": \"Message\"\n          },\n          \"customer_id\"\
+    : {\n            \"anyOf\": [\n              {\n                \"type\": \"string\"\
+    \n              },\n              {\n                \"type\": \"null\"\n    \
+    \          }\n            ],\n            \"title\": \"Customer Id\",\n      \
+    \      \"default\": null\n          }\n        }\n      },\n      \"output_schema\"\
+    : {\n        \"type\": \"object\",\n        \"title\": \"Output\",\n        \"\
+    required\": [\n          \"topic\",\n          \"urgency\",\n          \"summary\"\
+    ,\n          \"language\",\n          \"message\"\n        ],\n        \"properties\"\
+    : {\n          \"topic\": {\n            \"enum\": [\n              \"billing\"\
+    ,\n              \"technical\",\n              \"account\",\n              \"\
+    shipping\",\n              \"product\",\n              \"general\"\n         \
+    \   ],\n            \"type\": \"string\",\n            \"title\": \"Topic\"\n\
+    \          },\n          \"message\": {\n            \"type\": \"string\",\n \
+    \           \"title\": \"Message\"\n          },\n          \"summary\": {\n \
+    \           \"type\": \"string\",\n            \"title\": \"Summary\"\n      \
+    \    },\n          \"urgency\": {\n            \"enum\": [\n              \"low\"\
+    ,\n              \"medium\",\n              \"high\",\n              \"critical\"\
+    \n            ],\n            \"type\": \"string\",\n            \"title\": \"\
+    Urgency\"\n          },\n          \"language\": {\n            \"type\": \"string\"\
+    ,\n            \"title\": \"Language\"\n          },\n          \"customer_id\"\
+    : {\n            \"anyOf\": [\n              {\n                \"type\": \"string\"\
+    \n              },\n              {\n                \"type\": \"null\"\n    \
+    \          }\n            ],\n            \"title\": \"Customer Id\",\n      \
+    \      \"default\": null\n          }\n        }\n      },\n      \"config\":\
+    \ {\n        \"retries\": 3,\n        \"on_failure\": \"abort\",\n        \"input_mapping\"\
+    : null,\n        \"memory_access\": \"read-write\",\n        \"retry_backoff\"\
+    : \"fixed\",\n        \"system_prompt\": null,\n        \"output_mapping\": null,\n\
+    \        \"rate_limit_rpm\": null,\n        \"retry_delay_ms\": 1000,\n      \
+    \  \"timeout_seconds\": 20,\n        \"cache_ttl_seconds\": null,\n        \"\
+    fallback_agent_id\": null\n      }\n    },\n    {\n      \"id\": \"sentiment\"\
+    ,\n      \"agent_id\": \"b6f354f8-0746-4df8-a91e-da44df696f6d\",\n      \"agent_name\"\
+    : \"triage-sentiment\",\n      \"agent_version\": \"latest\",\n      \"a2a_endpoint\"\
+    : \"http://triage-sentiment.yard-support-ticket-triage-live.svc.cluster.local:9000\"\
+    ,\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"title\"\
+    : \"Input\",\n        \"required\": [\n          \"message\"\n        ],\n   \
+    \     \"properties\": {\n          \"topic\": {\n            \"anyOf\": [\n  \
+    \            {\n                \"type\": \"string\"\n              },\n     \
+    \         {\n                \"type\": \"null\"\n              }\n           \
+    \ ],\n            \"title\": \"Topic\",\n            \"default\": null\n     \
+    \     },\n          \"message\": {\n            \"type\": \"string\",\n      \
+    \      \"title\": \"Message\"\n          },\n          \"summary\": {\n      \
+    \      \"anyOf\": [\n              {\n                \"type\": \"string\"\n \
+    \             },\n              {\n                \"type\": \"null\"\n      \
+    \        }\n            ],\n            \"title\": \"Summary\",\n            \"\
+    default\": null\n          },\n          \"urgency\": {\n            \"anyOf\"\
+    : [\n              {\n                \"type\": \"string\"\n              },\n\
+    \              {\n                \"type\": \"null\"\n              }\n      \
+    \      ],\n            \"title\": \"Urgency\",\n            \"default\": null\n\
+    \          },\n          \"language\": {\n            \"anyOf\": [\n         \
+    \     {\n                \"type\": \"string\"\n              },\n            \
+    \  {\n                \"type\": \"null\"\n              }\n            ],\n  \
+    \          \"title\": \"Language\",\n            \"default\": null\n         \
+    \ },\n          \"customer_id\": {\n            \"anyOf\": [\n              {\n\
+    \                \"type\": \"string\"\n              },\n              {\n   \
+    \             \"type\": \"null\"\n              }\n            ],\n          \
+    \  \"title\": \"Customer Id\",\n            \"default\": null\n          }\n \
+    \       }\n      },\n      \"output_schema\": {\n        \"type\": \"object\"\
+    ,\n        \"title\": \"Output\",\n        \"required\": [\n          \"urgency\"\
+    ,\n          \"sentiment\",\n          \"frustration_score\",\n          \"churn_risk\"\
+    ,\n          \"key_phrases\",\n          \"message\"\n        ],\n        \"properties\"\
+    : {\n          \"topic\": {\n            \"anyOf\": [\n              {\n     \
+    \           \"type\": \"string\"\n              },\n              {\n        \
+    \        \"type\": \"null\"\n              }\n            ],\n            \"title\"\
+    : \"Topic\",\n            \"default\": null\n          },\n          \"message\"\
+    : {\n            \"type\": \"string\",\n            \"title\": \"Message\"\n \
+    \         },\n          \"summary\": {\n            \"anyOf\": [\n           \
+    \   {\n                \"type\": \"string\"\n              },\n              {\n\
+    \                \"type\": \"null\"\n              }\n            ],\n       \
+    \     \"title\": \"Summary\",\n            \"default\": null\n          },\n \
+    \         \"urgency\": {\n            \"type\": \"string\",\n            \"title\"\
+    : \"Urgency\"\n          },\n          \"language\": {\n            \"anyOf\"\
+    : [\n              {\n                \"type\": \"string\"\n              },\n\
+    \              {\n                \"type\": \"null\"\n              }\n      \
+    \      ],\n            \"title\": \"Language\",\n            \"default\": null\n\
+    \          },\n          \"sentiment\": {\n            \"enum\": [\n         \
+    \     \"positive\",\n              \"neutral\",\n              \"mildly_negative\"\
+    ,\n              \"frustrated\",\n              \"angry\"\n            ],\n  \
+    \          \"type\": \"string\",\n            \"title\": \"Sentiment\"\n     \
+    \     },\n          \"churn_risk\": {\n            \"enum\": [\n             \
+    \ \"low\",\n              \"medium\",\n              \"high\"\n            ],\n\
+    \            \"type\": \"string\",\n            \"title\": \"Churn Risk\"\n  \
+    \        },\n          \"customer_id\": {\n            \"anyOf\": [\n        \
+    \      {\n                \"type\": \"string\"\n              },\n           \
+    \   {\n                \"type\": \"null\"\n              }\n            ],\n \
+    \           \"title\": \"Customer Id\",\n            \"default\": null\n     \
+    \     },\n          \"key_phrases\": {\n            \"type\": \"array\",\n   \
+    \         \"items\": {\n              \"type\": \"string\"\n            },\n \
+    \           \"title\": \"Key Phrases\"\n          },\n          \"frustration_score\"\
+    : {\n            \"type\": \"integer\",\n            \"title\": \"Frustration\
+    \ Score\"\n          }\n        }\n      },\n      \"config\": {\n        \"retries\"\
+    : 2,\n        \"on_failure\": \"skip\",\n        \"input_mapping\": null,\n  \
+    \      \"memory_access\": \"read-write\",\n        \"retry_backoff\": \"fixed\"\
+    ,\n        \"system_prompt\": null,\n        \"output_mapping\": null,\n     \
+    \   \"rate_limit_rpm\": null,\n        \"retry_delay_ms\": 1000,\n        \"timeout_seconds\"\
+    : 20,\n        \"cache_ttl_seconds\": null,\n        \"fallback_agent_id\": null\n\
+    \      }\n    },\n    {\n      \"id\": \"respond\",\n      \"agent_id\": \"964a2673-82be-41e5-8f20-138c5d86345f\"\
+    ,\n      \"agent_name\": \"triage-responder\",\n      \"agent_version\": \"latest\"\
+    ,\n      \"a2a_endpoint\": \"http://triage-responder.yard-support-ticket-triage-live.svc.cluster.local:9000\"\
+    ,\n      \"input_schema\": {\n        \"type\": \"object\",\n        \"title\"\
+    : \"Input\",\n        \"required\": [\n          \"message\"\n        ],\n   \
+    \     \"properties\": {\n          \"topic\": {\n            \"anyOf\": [\n  \
+    \            {\n                \"type\": \"string\"\n              },\n     \
+    \         {\n                \"type\": \"null\"\n              }\n           \
+    \ ],\n            \"title\": \"Topic\",\n            \"default\": null\n     \
+    \     },\n          \"message\": {\n            \"type\": \"string\",\n      \
+    \      \"title\": \"Message\"\n          },\n          \"summary\": {\n      \
+    \      \"anyOf\": [\n              {\n                \"type\": \"string\"\n \
+    \             },\n              {\n                \"type\": \"null\"\n      \
+    \        }\n            ],\n            \"title\": \"Summary\",\n            \"\
+    default\": null\n          },\n          \"urgency\": {\n            \"anyOf\"\
+    : [\n              {\n                \"type\": \"string\"\n              },\n\
+    \              {\n                \"type\": \"null\"\n              }\n      \
+    \      ],\n            \"title\": \"Urgency\",\n            \"default\": null\n\
+    \          },\n          \"language\": {\n            \"anyOf\": [\n         \
+    \     {\n                \"type\": \"string\"\n              },\n            \
+    \  {\n                \"type\": \"null\"\n              }\n            ],\n  \
+    \          \"title\": \"Language\",\n            \"default\": null\n         \
+    \ },\n          \"sentiment\": {\n            \"anyOf\": [\n              {\n\
+    \                \"type\": \"string\"\n              },\n              {\n   \
+    \             \"type\": \"null\"\n              }\n            ],\n          \
+    \  \"title\": \"Sentiment\",\n            \"default\": null\n          },\n  \
+    \        \"churn_risk\": {\n            \"anyOf\": [\n              {\n      \
+    \          \"type\": \"string\"\n              },\n              {\n         \
+    \       \"type\": \"null\"\n              }\n            ],\n            \"title\"\
+    : \"Churn Risk\",\n            \"default\": null\n          },\n          \"customer_id\"\
+    : {\n            \"anyOf\": [\n              {\n                \"type\": \"string\"\
+    \n              },\n              {\n                \"type\": \"null\"\n    \
+    \          }\n            ],\n            \"title\": \"Customer Id\",\n      \
+    \      \"default\": null\n          },\n          \"frustration_score\": {\n \
+    \           \"anyOf\": [\n              {\n                \"type\": \"integer\"\
+    \n              },\n              {\n                \"type\": \"null\"\n    \
+    \          }\n            ],\n            \"title\": \"Frustration Score\",\n\
+    \            \"default\": null\n          }\n        }\n      },\n      \"output_schema\"\
+    : {\n        \"type\": \"object\",\n        \"title\": \"Output\",\n        \"\
+    required\": [\n          \"reply\",\n          \"next_action\",\n          \"\
+    suggested_tags\",\n          \"internal_note\"\n        ],\n        \"properties\"\
+    : {\n          \"reply\": {\n            \"type\": \"string\",\n            \"\
+    title\": \"Reply\"\n          },\n          \"topic\": {\n            \"anyOf\"\
+    : [\n              {\n                \"type\": \"string\"\n              },\n\
+    \              {\n                \"type\": \"null\"\n              }\n      \
+    \      ],\n            \"title\": \"Topic\",\n            \"default\": null\n\
+    \          },\n          \"summary\": {\n            \"anyOf\": [\n          \
+    \    {\n                \"type\": \"string\"\n              },\n             \
+    \ {\n                \"type\": \"null\"\n              }\n            ],\n   \
+    \         \"title\": \"Summary\",\n            \"default\": null\n          },\n\
+    \          \"urgency\": {\n            \"anyOf\": [\n              {\n       \
+    \         \"type\": \"string\"\n              },\n              {\n          \
+    \      \"type\": \"null\"\n              }\n            ],\n            \"title\"\
+    : \"Urgency\",\n            \"default\": null\n          },\n          \"sentiment\"\
+    : {\n            \"anyOf\": [\n              {\n                \"type\": \"string\"\
+    \n              },\n              {\n                \"type\": \"null\"\n    \
+    \          }\n            ],\n            \"title\": \"Sentiment\",\n        \
+    \    \"default\": null\n          },\n          \"customer_id\": {\n         \
+    \   \"anyOf\": [\n              {\n                \"type\": \"string\"\n    \
+    \          },\n              {\n                \"type\": \"null\"\n         \
+    \     }\n            ],\n            \"title\": \"Customer Id\",\n           \
+    \ \"default\": null\n          },\n          \"next_action\": {\n            \"\
+    enum\": [\n              \"send_as_is\",\n              \"route_to_human\",\n\
+    \              \"escalate_to_manager\",\n              \"request_more_info\"\n\
+    \            ],\n            \"type\": \"string\",\n            \"title\": \"\
+    Next Action\"\n          },\n          \"internal_note\": {\n            \"type\"\
+    : \"string\",\n            \"title\": \"Internal Note\"\n          },\n      \
+    \    \"suggested_tags\": {\n            \"type\": \"array\",\n            \"items\"\
+    : {\n              \"type\": \"string\"\n            },\n            \"title\"\
+    : \"Suggested Tags\"\n          },\n          \"frustration_score\": {\n     \
+    \       \"anyOf\": [\n              {\n                \"type\": \"integer\"\n\
+    \              },\n              {\n                \"type\": \"null\"\n     \
+    \         }\n            ],\n            \"title\": \"Frustration Score\",\n \
+    \           \"default\": null\n          }\n        }\n      },\n      \"config\"\
+    : {\n        \"retries\": 2,\n        \"on_failure\": \"abort\",\n        \"input_mapping\"\
+    : null,\n        \"memory_access\": \"read-write\",\n        \"retry_backoff\"\
+    : \"fixed\",\n        \"system_prompt\": null,\n        \"output_mapping\": null,\n\
+    \        \"rate_limit_rpm\": null,\n        \"retry_delay_ms\": 1000,\n      \
+    \  \"timeout_seconds\": 45,\n        \"cache_ttl_seconds\": null,\n        \"\
+    fallback_agent_id\": null\n      }\n    }\n  ]\n}"
+kind: ConfigMap
+metadata:
+  name: yard-system-spec
+  namespace: yard-support-ticket-triage-live
