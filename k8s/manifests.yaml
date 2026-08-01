@@ -60,36 +60,24 @@ spec:
       - env:
         - name: YARD_SYSTEM_ID
           value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
-        - name: YARD_TRANSPORT
-          value: http
-        - name: YARD_REDIS_URL
-          value: redis://redis:6379
-        - name: YARD_ENGINE_TYPE
-          value: chain_executor
-        - name: YARD_OTLP_ENDPOINT
-          value: http://jaeger:4318/v1/traces
-        - name: YARD_ROLE
-          value: in-cluster-orchestrator
-        - name: YARD_SYSTEM_SPEC_PATH
-          value: /etc/agentyard/system.json
         image: agentyard-engine:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
           httpGet:
             path: /health
-            port: 8003
+            port: 9000
           initialDelaySeconds: 15
           periodSeconds: 30
           timeoutSeconds: 5
         name: orchestrator
         ports:
-        - containerPort: 8003
+        - containerPort: 9000
         readinessProbe:
           failureThreshold: 2
           httpGet:
             path: /health
-            port: 8003
+            port: 9000
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 3
@@ -108,17 +96,9 @@ spec:
           readOnlyRootFilesystem: false
           runAsNonRoot: true
           runAsUser: 1000
-        volumeMounts:
-        - mountPath: /etc/agentyard
-          name: yard-system-spec
-          readOnly: true
       securityContext:
         fsGroup: 1000
         runAsNonRoot: true
-      volumes:
-      - configMap:
-          name: yard-system-spec
-        name: yard-system-spec
 ---
 apiVersion: v1
 kind: Service
@@ -128,8 +108,8 @@ metadata:
 spec:
   ports:
   - nodePort: 30527
-    port: 8003
-    targetPort: 8003
+    port: 9000
+    targetPort: 9000
   selector:
     app: orchestrator
   type: NodePort
@@ -458,7 +438,7 @@ data:
     \ null\n    strategy: passthrough\nenvironment: dev\nerror_recovery:\n  circuit_breaker_enabled:\
     \ true\n  circuit_breaker_reset_seconds: 60\n  circuit_breaker_threshold: 3\n\
     \  dead_letter_queue: true\n  global_timeout_seconds: 240\n  max_total_retries:\
-    \ 10\n  on_system_failure: return_partial\ngithub_repo_url: https://github.com/advaidg/yard-support-ticket-triage--live-\n\
+    \ 10\n  on_system_failure: return_partial\ngithub_repo_url: https://github.com/advaidg/yard-support-ticket-triage-live\n\
     global_token: null\nid: 3f1c2295-bb97-4e5f-a092-373d067dcf12\nmemory_config:\n\
     \  initial_context: null\n  max_memory_keys: 150\n  memory_ttl_seconds: null\n\
     \  open: true\n  persistence: session\n  schema: null\n  strategy: shared_bus\n\
@@ -489,8 +469,8 @@ data:
     \ null\n  quality_threshold: null\n  reflection_enabled: null\n  reflection_prompt:\
     \ null\n  routing_mode: sequential\n  system_prompt: Triage inbound customer tickets\
     \ through classification, sentiment\n    analysis, and response drafting\n  transport_mode:\
-    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-07-31T23:21:20.895026Z'\n\
-    version: 6\n"
+    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T00:48:43.912943Z'\n\
+    version: 8\n"
   transport: http
 kind: ConfigMap
 metadata:
