@@ -9,6 +9,9 @@ from fastapi import FastAPI
 app = FastAPI(title="Support Ticket Triage (live)")
 
 TOKEN = ""
+# h11 (httpx's transport) rejects "Bearer " with nothing after it as an
+# illegal header value — only attach Authorization when a token exists.
+AGENT_HEADERS = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
 AGENTS = [
     {"id": "classify", "agent_id": "fa08fb4c-86ab-4856-960f-f751b55e551f", "endpoint": "http://triage-classifier:9101", "timeout": 20},
     {"id": "sentiment", "agent_id": "b6f354f8-0746-4df8-a91e-da44df696f6d", "endpoint": "http://triage-sentiment:9102", "timeout": 20},
@@ -32,7 +35,7 @@ EDGES = [
 
 async def call_agent(endpoint: str, input_data: dict) -> dict:
     async with httpx.AsyncClient() as client:
-        resp = await client.post(endpoint, json={"input": input_data}, headers={"Authorization": f"Bearer {TOKEN}"}, timeout=240)
+        resp = await client.post(endpoint, json={"input": input_data}, headers=AGENT_HEADERS, timeout=240)
         resp.raise_for_status()
         return resp.json()
 
