@@ -150,6 +150,8 @@ spec:
           value: '9000'
         - name: YARD_OTLP_ENDPOINT
           value: http://jaeger:4318/v1/traces
+        - name: YARD_LLM_PROVIDER
+          value: bedrock
         - name: YARD_MEMORY
           value: shared_bus
         image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-classifier:latest
@@ -247,6 +249,8 @@ spec:
           value: '9000'
         - name: YARD_OTLP_ENDPOINT
           value: http://jaeger:4318/v1/traces
+        - name: YARD_LLM_PROVIDER
+          value: bedrock
         - name: YARD_MEMORY
           value: shared_bus
         image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-sentiment:latest
@@ -344,6 +348,8 @@ spec:
           value: '9000'
         - name: YARD_OTLP_ENDPOINT
           value: http://jaeger:4318/v1/traces
+        - name: YARD_LLM_PROVIDER
+          value: bedrock
         - name: YARD_MEMORY
           value: shared_bus
         image: 742851378787.dkr.ecr.us-east-1.amazonaws.com/agentyard-triage-responder:latest
@@ -472,8 +478,8 @@ data:
     \ null\n  quality_threshold: null\n  reflection_enabled: null\n  reflection_prompt:\
     \ null\n  routing_mode: sequential\n  system_prompt: Triage inbound customer tickets\
     \ through classification, sentiment\n    analysis, and response drafting\n  transport_mode:\
-    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T01:36:40.488454Z'\n\
-    version: 17\n"
+    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T04:11:11.606225Z'\n\
+    version: 20\n"
   transport: http
 kind: ConfigMap
 metadata:

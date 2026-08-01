@@ -31,6 +31,7 @@ services:
       YARD_REDIS_URL: redis://redis:6379
       YARD_PORT: '9000'
       YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_LLM_PROVIDER: bedrock
       YARD_MEMORY: shared_bus
     depends_on:
       redis:
@@ -54,6 +55,7 @@ services:
       YARD_REDIS_URL: redis://redis:6379
       YARD_PORT: '9000'
       YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_LLM_PROVIDER: bedrock
       YARD_MEMORY: shared_bus
     depends_on:
       redis:
@@ -77,6 +79,7 @@ services:
       YARD_REDIS_URL: redis://redis:6379
       YARD_PORT: '9000'
       YARD_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+      YARD_LLM_PROVIDER: bedrock
       YARD_MEMORY: shared_bus
     depends_on:
       redis:

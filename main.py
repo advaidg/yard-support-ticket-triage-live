@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import time
 
 import httpx
 from fastapi import FastAPI
@@ -44,13 +45,22 @@ async def call_agent(endpoint: str, input_data: dict) -> dict:
 async def invoke(input: dict):
     current = input.get("input", input)
     trace = []
-    for agent in AGENTS:
+    for i, agent in enumerate(AGENTS):
+        start = time.monotonic()
         try:
             result = await call_agent(agent["endpoint"], current)
-            trace.append({"agent": agent["id"], "status": "completed", "output": result})
+            duration_ms = int((time.monotonic() - start) * 1000)
+            # Mission Control's trace step renderer keys rows by `step` and
+            # reads `agent_name`/`duration_ms` (matches the local
+            # chain_executor's own trace shape) — this used to emit `agent`
+            # with no `step` or timing at all, so every deployed-
+            # orchestrator invoke rendered blank step names, "(ms)" with no
+            # number, and React key warnings for the undefined `step`.
+            trace.append({"step": i + 1, "agent_name": agent["id"], "status": "completed", "output": result, "duration_ms": duration_ms})
             current = result.get("output", result)
         except Exception as e:
-            trace.append({"agent": agent["id"], "status": "failed", "error": str(e)})
+            duration_ms = int((time.monotonic() - start) * 1000)
+            trace.append({"step": i + 1, "agent_name": agent["id"], "status": "failed", "error": str(e), "duration_ms": duration_ms})
     return {"output": current, "trace": trace, "status": "completed"}
 
 
