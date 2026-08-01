@@ -478,8 +478,8 @@ data:
     \ null\n  quality_threshold: null\n  reflection_enabled: null\n  reflection_prompt:\
     \ null\n  routing_mode: sequential\n  system_prompt: Triage inbound customer tickets\
     \ through classification, sentiment\n    analysis, and response drafting\n  transport_mode:\
-    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T04:11:11.606225Z'\n\
-    version: 20\n"
+    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T08:19:07.708979Z'\n\
+    version: 21\n"
   transport: http
 kind: ConfigMap
 metadata:
