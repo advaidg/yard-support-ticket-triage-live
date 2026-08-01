@@ -60,6 +60,9 @@ spec:
       - env:
         - name: YARD_SYSTEM_ID
           value: 3f1c2295-bb97-4e5f-a092-373d067dcf12
+        - name: YARD_AGENT_ENDPOINTS
+          value: '{"classify": "http://triage-classifier:9000", "sentiment": "http://triage-sentiment:9000",
+            "respond": "http://triage-responder:9000"}'
         image: agentyard-engine:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -469,8 +472,8 @@ data:
     \ null\n  quality_threshold: null\n  reflection_enabled: null\n  reflection_prompt:\
     \ null\n  routing_mode: sequential\n  system_prompt: Triage inbound customer tickets\
     \ through classification, sentiment\n    analysis, and response drafting\n  transport_mode:\
-    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T01:01:44.500613Z'\n\
-    version: 11\n"
+    \ centralized\nowner: dev-admin\nstatus: deployed\nupdated_at: '2026-08-01T01:19:30.903098Z'\n\
+    version: 12\n"
   transport: http
 kind: ConfigMap
 metadata:
