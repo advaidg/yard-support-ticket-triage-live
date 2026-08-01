@@ -7,9 +7,9 @@ app = FastAPI(title="Support Ticket Triage (live)")
 
 TOKEN = ""
 AGENTS = [
-    {"id": "classify", "agent_id": "fa08fb4c-86ab-4856-960f-f751b55e551f", "endpoint": "", "timeout": 20},
-    {"id": "sentiment", "agent_id": "b6f354f8-0746-4df8-a91e-da44df696f6d", "endpoint": "", "timeout": 20},
-    {"id": "respond", "agent_id": "964a2673-82be-41e5-8f20-138c5d86345f", "endpoint": "", "timeout": 45},
+    {"id": "classify", "agent_id": "fa08fb4c-86ab-4856-960f-f751b55e551f", "endpoint": "http://triage-classifier:9101", "timeout": 20},
+    {"id": "sentiment", "agent_id": "b6f354f8-0746-4df8-a91e-da44df696f6d", "endpoint": "http://triage-sentiment:9102", "timeout": 20},
+    {"id": "respond", "agent_id": "964a2673-82be-41e5-8f20-138c5d86345f", "endpoint": "http://triage-responder:9103", "timeout": 45},
 ]
 
 EDGES = [
